@@ -1,0 +1,41 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta name="generator" content="Hexo 3.8.0"><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><meta name="author" content="徐煜企"><title>java设计模式-观察者模式 · 徐煜企的博客</title><meta name="description" content="观察者模式引言：
+为什么观察者模式会出现呢？
+为了建立一种对象与对象之间的依赖关系，一个对象发生改变时将自动通知其他对象，其他对象将相应做出反应。在此，发生改变的对象称为观察目标，而被通知的对象称为观察者，一个观察目标可以对应多个观察者，而且这些观察者之间没有相互联系，可以根据需要增加和删除观察者，"><meta name="keywords"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="renderer" content="webkit"><link rel="short icon" href="/images/favicon.png" type="image/x-icon"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/blog_basic.css"><link rel="stylesheet" href="/css/font-awesome.min.css"><link rel="alternate" type="application/atom+xml" title="ATOM 1.0" href="/atom.xml"></head><body><div class="sidebar animated fadeInDown"><div class="logo-title"><div class="title"><img src="/images/logo@2x.png" style="width:127px;"><h3 title><a href="/">徐煜企的博客</a></h3><div class="description"><p>聪明|机智</p></div></div></div><ul class="social-links"></ul></div><div class="main"><div class="page-top animated fadeInDown"><div class="nav"><li><a href="/">首页</a></li></div><div class="information"><div class="back_btn"><li><a class="fa fa-chevron-left" onclick="window.history.go(-1)"> </a></li></div><div class="avatar"><img></div></div></div><div class="autopagerize_page_element"><div class="content"><div class="post-page"><div class="post animated fadeInDown"><div class="post-title"><h3><a>java设计模式-观察者模式</a></h3></div><div class="post-content"><h1 id="观察者模式"><a href="#观察者模式" class="headerlink" title="观察者模式"></a>观察者模式</h1><h2 id="引言："><a href="#引言：" class="headerlink" title="引言："></a>引言：</h2><blockquote>
+<p>为什么观察者模式会出现呢？</p>
+<p>为了建立一种对象与对象之间的依赖关系，一个对象发生改变时将自动通知其他对象，其他对象将相应做出反应。在此，发生改变的对象称为观察目标，而被通知的对象称为观察者，一个观察目标可以对应多个观察者，而且这些观察者之间没有相互联系，可以根据需要增加和删除观察者，使得系统更易于扩展，这就是为什么需要观察者模式。</p>
+</blockquote>
+<h2 id="定义："><a href="#定义：" class="headerlink" title="定义："></a>定义：</h2><p>观察者模式（Observer Pattern）：定义了对象之间的一种一对多依赖关系，使得每当一个对象状态发生改变时，其相关依赖对象皆得到通知并被自动更新。观察者模式又被称为发布-订阅（Publish/Subscribe）模式，模型-视图（Model/View）模式，源-监听器（Source/Listener）模式，或从属者（Dependents）模式。观察者模式是一种对象行为型的模式。</p>
+<h2 id="类图："><a href="#类图：" class="headerlink" title="类图："></a>类图：</h2><p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/img/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8FUML.png" alt="image"></p>
+<p>当两个对象是松耦合的，它们之间能够交互，但是相互了解的很少。</p>
+<p>观察者模式提供了主题和观察者之间的松耦合设计。因为主题只知道观察者实现了某个接口（即Observer接口）。主题不需要知道具体观察者是谁，做了些什么或其它任何细节。要增加新的观察者或删除观察者，主题不会受到任何影响，不必修改主题代码。</p>
+<p>可以独立地复用主题和观察者，他们之间互不影响，即是松耦合。</p>
+<blockquote>
+<p>设计原则：在交互的对象之间争取松耦合设计</p>
+<p>由于松耦合设计使得对象间的依赖最小化，所以，我们能够创建柔性的oo系统，应对变化的情况，因为对象间的依赖降到了最低。</p>
+</blockquote>
+<h2 id="实例："><a href="#实例：" class="headerlink" title="实例："></a>实例：</h2><p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/img/%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F%E5%AE%9E%E4%BE%8B.png" alt="image"></p>
+<h2 id="观察者模式适用场景"><a href="#观察者模式适用场景" class="headerlink" title="观察者模式适用场景"></a>观察者模式适用场景</h2><p>当一个对象的数据更新时需要通知其他对象，但这个对象又不希望和被通知的那些对象形成紧耦合。<br>当一个对象的数据更新时，这个对象需要让其他对象也各自更新自己的数据，但这个对象不知道具体有多少对象需要更新数据</p>
+<h2 id="观察者模式与其他模式的关系"><a href="#观察者模式与其他模式的关系" class="headerlink" title="观察者模式与其他模式的关系"></a>观察者模式与其他模式的关系</h2><ul>
+<li><strong>观察者模式与备忘录模式的关系</strong></li>
+</ul>
+<p>​      观察者模式使用了备忘录模式（Memento Pattern）,暂时将观察者对象存储在被观察者对象里面</p>
+<ul>
+<li><strong>观察者模式与MVC模式的关系</strong></li>
+</ul>
+<p>​     观察者模式可以用来实现MVC模式。观察者模式中的主题便是MVC模式中的模型加控制器，而观察者便是视图<br>​    一般情况下，MVC是观察者模式、组合模式、策略模式等设计模式的组合。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><strong>优点</strong></p>
+<ul>
+<li>具体主题和具体观察者是松耦合关系。</li>
+</ul>
+<p>由于主题（Subject）接口仅仅依赖于观察者（Observer）接口，因此具体主题只是知道它的观察者是实现观察者（Observer）接口的某个类的实例，但不需要知道具体是哪个类。同样，由于观察者仅仅依赖于主题（Subject）接口，因此具体观察者只是知道它依赖的主题是实现主题（subject）接口的某个类的实例，但不需要知道具体是哪个类。</p>
+<ul>
+<li>观察者模式满足“开-闭原则”。</li>
+</ul>
+<p>主题（Subject）接口仅仅依赖于观察者（Observer）接口，这样，我们就可以让创建具体主题的类也仅仅是依赖于观察者（Observer）接口，因此如果增加新的实现观察者（Observer）接口的类，不必修改创建具体主题的类的代码。同样，创建具体观察者的类仅仅依赖于主题（Observer）接口，如果增加新的实现主题（Subject）接口的类，也不必修改创建具体观察者类的代码。</p>
+<p><strong>缺点</strong></p>
+<ul>
+<li>如果一个被观察者对象有很多直接和间接的观察者的话，将所有的观察者都通知到会花费很多时间。</li>
+<li>如果在被观察者之间有循环依赖的话，给观察者会触发它们之间进行循环调用，导致系统崩溃。在使用观察者模式时要特别注意这一点。</li>
+<li>虽然观察者模式可以随时使观察者知道所观察的对象发生了变化，但是观察者模式没有相应的机制是观察者知道所观察的对象是怎么发生变化的</li>
+</ul>
+</div><div class="post-footer"><div class="meta"><div class="info"><i class="fa fa-sun-o"></i><span class="date">2019-03-28</span><i class="fa fa-tag"></i></div></div></div></div><div class="share"><div class="evernote"><a class="fa fa-bookmark" href="javascript:(function(){EN_CLIP_HOST='http://www.evernote.com';try{var%20x=document.createElement('SCRIPT');x.type='text/javascript';x.src=EN_CLIP_HOST+'/public/bookmarkClipper.js?'+(new%20Date().getTime()/100000);document.getElementsByTagName('head')[0].appendChild(x);}catch(e){location.href=EN_CLIP_HOST+'/clip.action?url='+encodeURIComponent(location.href)+'&amp;title='+encodeURIComponent(document.title);}})();" ref="nofollow" target="_blank"></a></div><div class="weibo"><a class="fa fa-weibo" href="javascript:void((function(s,d,e){try{}catch(e){}var f='http://service.weibo.com/share/share.php?',u=d.location.href,p=['url=',e(u),'&amp;title=',e(d.title),'&amp;appkey=2924220432'].join('');function a(){if(!window.open([f,p].join(''),'mb',['toolbar=0,status=0,resizable=1,width=620,height=450,left=',(s.width-620)/2,',top=',(s.height-450)/2].join('')))u.href=[f,p].join('');};if(/Firefox/.test(navigator.userAgent)){setTimeout(a,0)}else{a()}})(screen,document,encodeURIComponent));"></a></div><div class="twitter"><a class="fa fa-twitter" href="http://twitter.com/home?status=,https://xuyuqi77.github.io/2019/03/28/java设计模式-观察者模式/,徐煜企的博客,java设计模式-观察者模式,;"></a></div></div><div class="pagination"><ul class="clearfix"><li class="pre pagbuttons"><a class="btn" role="navigation" href="/2019/03/28/jvm垃圾回收算法与垃圾收集器/" title="jvm垃圾回收算法与垃圾收集器">上一篇</a></li><li class="next pagbuttons"><a class="btn" role="navigation" href="/2019/03/28/java设计模式-策略模式/" title="java设计模式-策略模式">下一篇</a></li></ul></div></div></div></div></div><script src="/js/jquery.js"></script><script src="/js/jquery-migrate-1.2.1.min.js"></script><script src="/js/jquery.appear.js"></script></body></html>
