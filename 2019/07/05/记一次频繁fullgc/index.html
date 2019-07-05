@@ -1,0 +1,111 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta name="generator" content="Hexo 3.8.0"><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><meta name="author" content="xuyuqi,xuyuqi16@gmail.com"><title>记一次频繁fullgc · 徐煜企的博客</title><meta name="description" content="频繁full gc问题定位现状：某个服务在长时间运行后，出现每隔5分钟左右执行一次full gc。随着运行时间加长，gc频率呈上升趋势。
+信息收集：服务占用CPU情况
+服务使用的垃圾收集器使用的JDK版本为1.8.0_40，使用默认垃圾回收器-XX:+UseParallelGC (即Parallel"><meta name="keywords" content="Java, Mysql, Wechat"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="renderer" content="webkit"><link rel="short icon" href="/images/favicon.png" type="image/x-icon"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/blog_basic.css"><link rel="stylesheet" href="/css/font-awesome.min.css"><link rel="alternate" type="application/atom+xml" title="ATOM 1.0" href="/atom.xml"></head><body><div class="sidebar animated fadeInDown"><div class="logo-title"><div class="title"><img src="/images/logo@2x.png" style="width:127px;"><h3 title><a href="/">徐煜企的博客</a></h3><div class="description"><p>聪明机智又可爱</p></div></div></div><ul class="social-links"><li><a href="http://github.com/xuyuqi77"><i class="fa fa-github"></i></a></li></ul></div><div class="main"><div class="page-top animated fadeInDown"><div class="nav"><li><a href="/">Home</a></li></div><div class="information"><div class="back_btn"><li><a class="fa fa-chevron-left" onclick="window.history.go(-1)"> </a></li></div><div class="avatar"><img src="/images/favicon.png"></div></div></div><div class="autopagerize_page_element"><div class="content"><div class="post-page"><div class="post animated fadeInDown"><div class="post-title"><h3><a>记一次频繁fullgc</a></h3></div><div class="post-content"><h1 id="频繁full-gc问题定位"><a href="#频繁full-gc问题定位" class="headerlink" title="频繁full gc问题定位"></a>频繁full gc问题定位</h1><h2 id="现状："><a href="#现状：" class="headerlink" title="现状："></a>现状：</h2><p>某个服务在长时间运行后，出现每隔5分钟左右执行一次full gc。随着运行时间加长，gc频率呈上升趋势。</p>
+<h2 id="信息收集："><a href="#信息收集：" class="headerlink" title="信息收集："></a>信息收集：</h2><h3 id="服务占用CPU情况"><a href="#服务占用CPU情况" class="headerlink" title="服务占用CPU情况"></a>服务占用CPU情况</h3><p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/cpu2.png" alt="fullgc3"></p>
+<h3 id="服务使用的垃圾收集器"><a href="#服务使用的垃圾收集器" class="headerlink" title="服务使用的垃圾收集器"></a>服务使用的垃圾收集器</h3><p>使用的JDK版本为<code>1.8.0_40</code>，使用默认垃圾回收器<code>-XX:+UseParallelGC</code> (即Parallel Scavenge + Parallel Old)。详情可看 Jconsole公共服务的截图。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/gc.png" alt="fullgc3"></p>
+<h3 id="GC次数与耗时统计"><a href="#GC次数与耗时统计" class="headerlink" title="GC次数与耗时统计"></a>GC次数与耗时统计</h3><p>服务运行10小时左右</p>
+<ul>
+<li>GC次数统计：ygc=2548次，fgc=91次。</li>
+<li>最新GC耗时：minor gc = 14.67ms，full gc = 74ms。</li>
+<li>平均耗时：minor gc = 13.34ms，full gc = 71.81ms。</li>
+<li>full gc间隔：5分钟左右</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/fullgc3-2.png" alt="fullgc3"></p>
+<p>​    从GC次数统计图中，也可以看到表示fgc的曲线，斜率成上升趋势。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/gc趋势图.png" alt="fullgc3"></p>
+<h3 id="heap内存分布"><a href="#heap内存分布" class="headerlink" title="heap内存分布"></a>heap内存分布</h3><p>截图时heap内存分布为 eden=116M， from=110MB ，to=112.5MB ，old=683MB。可以看到年轻代与老年代的内存分布是按照<code>NewRatio</code>分配(年轻代:老年代=1:2)，年轻代的内存分布并<strong>没有</strong>按照<code>SurvivorRatio</code> 分配（eden:from:to = 8:1:1）。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/heap2.png" alt="heap"></p>
+<h3 id="full-gc前后堆内容分析"><a href="#full-gc前后堆内容分析" class="headerlink" title="full gc前后堆内容分析"></a>full gc前后堆内容分析</h3><ul>
+<li>full gc前有大量不可达对象存在。</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/hprof-before.png" alt="hprof-before"></p>
+<ul>
+<li>同时可达对象内存占用不大(70MB)。</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/hprof-before2.png" alt="hprof-before2"></p>
+<ul>
+<li>full gc后不可达对象少了很多。</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/hprof-after.png" alt="hprof-after"></p>
+<ul>
+<li>大量<strong>可回收</strong>的char[]：</li>
+</ul>
+<p>下图是运行了60+小时字幕上屏，full gc前后char[]实例中的内容。可以看到gc前<code>[TransferResult]{id=null…</code>内容占用了大量的内存，gc后这部分内存被回收了。这部分内容是用于记录转写翻译等信息等的对象，随着运行时间的变长，每次创建对象的体积也会越来越大。</p>
+<p>full gc 前char[]实例分布：</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/char-before2.png" alt="hprof-after2"></p>
+<p>full gc后char[]实例分布：</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/char-after.png" alt="hprof-after2"></p>
+<h2 id="初步结论："><a href="#初步结论：" class="headerlink" title="初步结论："></a>初步结论：</h2><p>结合上述收集到的信息，可以初步得到的结论如下：</p>
+<ol>
+<li>服务CPU占用率稳定。</li>
+<li>服务堆内存使用与回收正常，未发现内存泄漏。</li>
+<li>服务YGC与FGC耗时稳定，未发现GC耗时较长现象。</li>
+<li>服务<strong>FGC频率成上升趋势</strong>。</li>
+</ol>
+<h2 id="GC原因："><a href="#GC原因：" class="headerlink" title="GC原因："></a>GC原因：</h2><h3 id="full-gc触发情况一"><a href="#full-gc触发情况一" class="headerlink" title="full gc触发情况一"></a>full gc触发情况一</h3><p>利用命令<code>jstat gccause pid</code>可以查看到执行GC的原因。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/fullgc5-2.png" alt="fullgc5"></p>
+<p>从图中可以看到这次GC由一次YGC与一次FGC组成。YGC的原因为<code>Allocation Failure</code>，FGC的原因则是<code>Ergonomics</code>。</p>
+<p><strong>Allocation Failure</strong> ：</p>
+<p>这个比较简单，表示空间分配失败。结合图中Eden区占用99.96%可以得出此时Eden空间不足，年轻代中没有足够的空间能够存储新的数据了，触发了YGC。</p>
+<p><strong>Ergonomics</strong> ：</p>
+<p>这个描述起来有点麻烦，从头一点一点梳理。</p>
+<ol>
+<li><p>公共服务使用的垃圾收集器为默认的配置<code>-XX:+UseParallelGC</code> ,表示年轻代用Parallel Scavenge，老年代用Parallel Old(PS MarkSweep)的组合。</p>
+</li>
+<li><p>Parallel Scavenge源码中GC执行的逻辑。</p>
+</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">bool PSScavenge::invoke() &#123;</span><br><span class="line">  ParallelScavengeHeap* <span class="keyword">const</span> heap = ParallelScavengeHeap::heap();</span><br><span class="line">  PSAdaptiveSizePolicy* policy = heap-&gt;size_policy();</span><br><span class="line">  IsGCActiveMark mark;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">const</span> bool scavenge_done = PSScavenge::invoke_no_policy();</span><br><span class="line">  </span><br><span class="line">  <span class="comment">// 关键代码</span></span><br><span class="line">  <span class="keyword">const</span> bool need_full_gc = !scavenge_done ||</span><br><span class="line">    policy-&gt;should_full_GC(heap-&gt;old_gen()-&gt;free_in_bytes());</span><br><span class="line">  bool full_gc_done = <span class="keyword">false</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (UsePerfData) &#123;</span><br><span class="line">    PSGCAdaptivePolicyCounters* <span class="keyword">const</span> counters = heap-&gt;gc_policy_counters();</span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">int</span> ffs_val = need_full_gc ? full_follows_scavenge : not_skipped;</span><br><span class="line">    counters-&gt;update_full_follows_scavenge(ffs_val);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 核心逻辑</span></span><br><span class="line">  <span class="keyword">if</span> (need_full_gc) &#123;</span><br><span class="line">    <span class="function">GCCauseSetter <span class="title">gccs</span><span class="params">(heap, GCCause::_adaptive_size_policy)</span></span>;</span><br><span class="line">    CollectorPolicy* cp = heap-&gt;collector_policy();</span><br><span class="line">    <span class="keyword">const</span> bool clear_all_softrefs = cp-&gt;should_clear_all_soft_refs();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (UseParallelOldGC) &#123;</span><br><span class="line">      full_gc_done = PSParallelCompact::invoke_no_policy(clear_all_softrefs);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      full_gc_done = PSMarkSweep::invoke_no_policy(clear_all_softrefs);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> full_gc_done;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol start="3">
+<li><p>那什么时候need_full_gc会为true呢？</p>
+<p>通过下面的代码可以知道<strong>如果晋升到老生代的平均大小大于老生代的剩余大小</strong>，则会认为需要一次full gc。至于padded_average_promoted_in_bytes()这个平均大小是怎么算出来的。简单来说就是<strong>加权平均值包括与平均值的偏差，其平均值加上其中的一些倍数。 这是对未来未知数的上限的最佳估计。</strong>这里就不贴代码了。也就是通过这样的算法，虚拟机估算出下次分配可能会发生无法分配的问题，于是<strong>提前预测到可能的问题，触发了一次full gc</strong>。</p>
+</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">bool PSAdaptiveSizePolicy::should_full_GC(size_t old_free_in_bytes) &#123;</span><br><span class="line">	<span class="comment">//如果晋升到老年代的平均大小大于老年代的剩余大小，则认为要进行一次full gc</span></span><br><span class="line">  bool result = padded_average_promoted_in_bytes() &gt; (<span class="keyword">float</span>) old_free_in_bytes;</span><br><span class="line">  <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ol start="4">
+<li><p>Ergonomics翻译成中文，一般是“人体工程学”。</p>
+<p>在JVM中的垃圾收集器中的Ergonomics就是负责<strong>自动的调解GC暂停时间和吞吐量之间的平衡，让虚拟机性能更好的一种做法</strong>。对于注重吞吐量的收集器来说，在某个generation被过渡使用之前，GC ergonomics就会启动一次GC。正如我们前面提到的，发生本次full gc正是在使用Parallel Scavenge收集器的情况下发生的。而Parallel Scavenge正是一款<strong>注重吞吐量</strong>的收集器。</p>
+</li>
+<li><p>Parallel Scavenge简单介绍</p>
+<p>Parallel Scavenge的目标是达到一个可控的吞吐量<code>吞吐量 = 程序运行时间/(程序运行时间+GC时间)</code>，如程序运行了99s，GC耗时1s，吞吐量 = 99/(99+1) = 99%。Parallel Scavenge提供了两个参数用以精确控制吞吐量，分别是用以控制最大GC停顿时间的<code>-XX:MaxGCPauseMillis</code>及直接控制吞吐量的参数<code>-XX:GCTimeRatio 默认值=99</code>。</p>
+</li>
+</ol>
+<p>结论：<strong>正是由于使用了Parallel Scavenge这个重视吞吐量的垃圾回收器，为了接近吞吐量，牺牲了full gc的频率。</strong></p>
+<h3 id="full-gc触发情况二"><a href="#full-gc触发情况二" class="headerlink" title="full gc触发情况二"></a>full gc触发情况二</h3><p>刚才是利用<code>jstat gccause</code>去实时查看gc的原因。其实我们也可以利用<code>-XX:+PrintGCDateStamps</code>等配置将gc日志输出到文件中。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/fullgc-cause2.png" alt="fullgc5"></p>
+<p>从图中看到，Full gc触发原因其实不光有<strong>Ergonomics</strong>，还有一部分来自<strong>Allocation Failure</strong>。</p>
+<p>Allocation Failure的原因刚才也分析过了是由于<strong>空间分配失败</strong>。</p>
+<p>从截图中可以发现触发full gc时，ParOldGen已经使用了600+MB，几乎用完了老年代。此时将对象放到老年代的时候就很有可能空间不够。（当然也有空间看起来够，但因为存在大量碎片，触发Allocation Failure的情况）。</p>
+<p>结论：<strong>长时间运行转写机后，由于转写翻译等体积不断增大，每次创建对象都需要分配较大的空间。当内存使用达到上限时，也会触发Full gc</strong>。</p>
+<h2 id="优化方案："><a href="#优化方案：" class="headerlink" title="优化方案："></a>优化方案：</h2><p>宏观调整：</p>
+<ol>
+<li><p>增加堆的内存空间。</p>
+<p>不论Ergonomics，还是Allocation Failure，本质都是由于内存空间不足。适当的增加堆空间可以降低GC触发频率，缺点则是GC的耗时会上升。</p>
+</li>
+<li><p>设置最大GC停顿时间 <code>-XX:MaxGCPauseMillis</code> 或者直接控制吞吐量的参数<code>-XX:GCTimeRatio</code></p>
+<p>使用现在的注重吞吐量的垃圾收集器，则可以降低吞吐量或增大最大GC停顿时间，来降低GC的次数。但是具体参数值需要实验。</p>
+</li>
+<li><p>更换垃圾收集器。</p>
+<p>例如使用G1收集器，测试后full gc频率明显降低，缺点未知。</p>
+</li>
+</ol>
+<p>业务内部调整：</p>
+<ol>
+<li><p>减小对象大小</p>
+<p>从dump文件分析结果来看，占用空间较大的对象主要是TransferResult。若能够减小这个对象的大小，也应该可以降低full gc的频率。</p>
+</li>
+</ol>
+<h2 id="G1测试效果："><a href="#G1测试效果：" class="headerlink" title="G1测试效果："></a>G1测试效果：</h2><p>在只修改配置<code>-XX:+UseG1GC</code>的情况下，测试10小时，才出现第一次full gc。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/fullgc/g1-2.png" alt="fullgc5"></p>
+<p>运行18小时，full gc一共9次。</p>
+</div><div class="post-footer"><div class="meta"><div class="info"><i class="fa fa-sun-o"></i><span class="date">2019-07-05</span><i class="fa fa-tag"></i><a class="tag" href="/tags/java/" title="java">java </a></div></div></div></div><div class="share"><div class="evernote"><a class="fa fa-bookmark" href="javascript:(function(){EN_CLIP_HOST='http://www.evernote.com';try{var%20x=document.createElement('SCRIPT');x.type='text/javascript';x.src=EN_CLIP_HOST+'/public/bookmarkClipper.js?'+(new%20Date().getTime()/100000);document.getElementsByTagName('head')[0].appendChild(x);}catch(e){location.href=EN_CLIP_HOST+'/clip.action?url='+encodeURIComponent(location.href)+'&amp;title='+encodeURIComponent(document.title);}})();" ref="nofollow" target="_blank"></a></div><div class="weibo"><a class="fa fa-weibo" href="javascript:void((function(s,d,e){try{}catch(e){}var f='http://service.weibo.com/share/share.php?',u=d.location.href,p=['url=',e(u),'&amp;title=',e(d.title),'&amp;appkey=2924220432'].join('');function a(){if(!window.open([f,p].join(''),'mb',['toolbar=0,status=0,resizable=1,width=620,height=450,left=',(s.width-620)/2,',top=',(s.height-450)/2].join('')))u.href=[f,p].join('');};if(/Firefox/.test(navigator.userAgent)){setTimeout(a,0)}else{a()}})(screen,document,encodeURIComponent));"></a></div><div class="twitter"><a class="fa fa-twitter" href="http://twitter.com/home?status=,https://xuyuqi77.github.io/2019/07/05/记一次频繁fullgc/,徐煜企的博客,记一次频繁fullgc,;"></a></div></div><div class="pagination"><ul class="clearfix"><li class="next pagbuttons"><a class="btn" role="navigation" href="/2019/06/12/技术文章/" title="技术文章">Próximo post</a></li></ul></div><a id="comments"></a><div id="vcomments" style="margin:0 30px;"></div><script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script><script src="//cdn.jsdelivr.net/gh/xcss/valine@v1.1.7/dist/Valine.min.js?v=undefined"></script><script>var valine = new Valine({
+  el:'#vcomments',
+  notify:false || false, 
+  verify:false|| false, 
+  app_id:'ACHHxtdr6iGJakMn0fm8SfAO-gzGzoHsz',
+  app_key:'O2Wqtq6XI9kCFU3UtjgwLRuW',
+  placeholder:'请在此输入您的留言',
+  path: window.location.pathname,
+  avatar:'mm'
+})</script></div></div></div></div><script src="/js/jquery.js"></script><script src="/js/jquery-migrate-1.2.1.min.js"></script><script src="/js/jquery.appear.js"></script></body></html>
