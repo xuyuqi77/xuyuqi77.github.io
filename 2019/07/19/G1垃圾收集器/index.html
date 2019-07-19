@@ -1,0 +1,247 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta name="generator" content="Hexo 3.8.0"><meta charset="utf-8"><meta name="X-UA-Compatible" content="IE=edge"><meta name="author" content="xuyuqi,xuyuqi16@gmail.com"><title>G1垃圾收集器 · 徐煜企的博客</title><meta name="description" content="G1垃圾收集器基本介绍G1是一种服务器端的垃圾收集器，应用在多处理器和大容量内存环境中，在实现高吞吐量的同时，尽可能的满足垃圾收集暂停时间的要求。它是专门针对以下应用场景设计的:  
+
+像CMS收集器一样，能与应用程序线程并发执行。 
+整理空闲空间更快。 
+需要GC停顿时间更好预测。 
+不希望牺牲大"><meta name="keywords" content="Java, Mysql, Wechat"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"><meta content="yes" name="apple-mobile-web-app-capable"><meta content="black" name="apple-mobile-web-app-status-bar-style"><meta content="telephone=no" name="format-detection"><meta name="renderer" content="webkit"><link rel="short icon" href="/images/favicon.png" type="image/x-icon"><link rel="stylesheet" href="/css/style.css"><link rel="stylesheet" href="/css/blog_basic.css"><link rel="stylesheet" href="/css/font-awesome.min.css"><link rel="alternate" type="application/atom+xml" title="ATOM 1.0" href="/atom.xml"></head><body><div class="sidebar animated fadeInDown"><div class="logo-title"><div class="title"><img src="/images/logo@2x.png" style="width:127px;"><h3 title><a href="/">徐煜企的博客</a></h3><div class="description"><p>聪明机智又可爱</p></div></div></div><ul class="social-links"><li><a href="http://github.com/xuyuqi77"><i class="fa fa-github"></i></a></li></ul></div><div class="main"><div class="page-top animated fadeInDown"><div class="nav"><li><a href="/">首页</a></li></div><div class="information"><div class="back_btn"><li><a class="fa fa-chevron-left" onclick="window.history.go(-1)"> </a></li></div><div class="avatar"><img src="/images/favicon.png"></div></div></div><div class="autopagerize_page_element"><div class="content"><div class="post-page"><div class="post animated fadeInDown"><div class="post-title"><h3><a>G1垃圾收集器</a></h3></div><div class="post-content"><h1 id="G1垃圾收集器"><a href="#G1垃圾收集器" class="headerlink" title="G1垃圾收集器"></a>G1垃圾收集器</h1><h2 id="基本介绍"><a href="#基本介绍" class="headerlink" title="基本介绍"></a>基本介绍</h2><p>G1是一种服务器端的垃圾收集器，应用在多处理器和大容量内存环境中，在实现高吞吐量的同时，尽可能的满足<strong>垃圾收集暂停时间</strong>的要求。它是专门针对以下应用场景设计的:  </p>
+<ul>
+<li>像CMS收集器一样，能与应用程序线程并发执行。 </li>
+<li>整理空闲空间更快。 </li>
+<li>需要GC停顿时间更好预测。 </li>
+<li>不希望牺牲大量的吞吐性能。 </li>
+<li>不需要更大的Java Heap。</li>
+</ul>
+<p>G1收集器的设计目标是取代CMS收集器，它同CMS相比，在以下方面表现的更出色：</p>
+<ul>
+<li>G1是一个有整理内存过程的垃圾收集器，不会产生很多内存碎片。</li>
+<li>G1的Stop The World(STW)更可控，G1在停顿时间上添加了预测机制，用户可以指定期望停顿时间。</li>
+</ul>
+<p>官方原文：</p>
+<blockquote>
+<ol>
+<li>The Garbage-First (G1) collector is a server-style garbage collector, targeted for multi-processor machines with large memories. It meets garbage collection (GC) pause time goals with a high probability, while achieving high throughput. <em>The G1 garbage collector is fully supported in Oracle JDK 7 update 4 and later releases</em>. The G1 collector is designed for applications that:</li>
+<li><ul>
+<li>Can operate concurrently with applications threads like the CMS collector.</li>
+<li>Compact free space without lengthy GC induced pause times.</li>
+<li>Need more predictable GC pause durations.</li>
+<li>Do not want to sacrifice a lot of throughput performance.</li>
+<li>Do not require a much larger Java heap.</li>
+</ul>
+</li>
+<li>G1 is planned as the long term replacement for the Concurrent Mark-Sweep Collector (CMS). Comparing G1 with CMS, there are differences that make G1 a better solution. One difference is that G1 is a compacting collector. G1 compacts sufficiently to completely avoid the use of fine-grained free lists for allocation, and instead relies on regions. This considerably simplifies parts of the collector, and mostly eliminates potential fragmentation issues. Also, G1 offers more predictable garbage collection pauses than the CMS collector, and allows users to specify desired pause targets.</li>
+</ol>
+</blockquote>
+<h2 id="重要概念"><a href="#重要概念" class="headerlink" title="重要概念"></a>重要概念</h2><h3 id="Region"><a href="#Region" class="headerlink" title="Region"></a>Region</h3><p>传统的GC收集器将连续的内存空间划分为新生代、老年代和永久代（jdk8已去除），这种划分的特点是各代的存储地址是<strong>连续</strong>的。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/g1/%E4%BC%A0%E7%BB%9F%E5%86%85%E5%AD%98%E5%88%86%E5%B8%83.png?raw=true" alt="img"></p>
+<p>G1的各代存储地址是<strong>不连续</strong>的，每一代都使用了n个不连续的大小相同的Region，每个Region占有一块连续的虚拟内存地址。在物理上不需要连续，带来了额外的好处：<code>有的分区内垃圾对象特别多，有的分区内垃圾对象很少，G1会优先回收垃圾对象特别多的分区，这样可以花费较少的时间来回收这些分区的垃圾。</code>这也就是G1名字的由来，即首先收集垃圾最多的分区。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/g1/g1%E5%86%85%E5%AD%98%E5%88%86%E5%B8%83.png" alt="img"></p>
+<p>其中部分Region标记了H，表示这些Region存储的是巨大对象<code>humongous object、H-obj</code>，即对象的大小 &gt;= Region一半。</p>
+<p>H-obj的特征如下：</p>
+<blockquote>
+<p>1.H-obj直接分配到了老年代，防止了反复拷贝移动。</p>
+<p>2.H-obj在<code>并发标记阶段（global concurrent marking）</code>的 cleanup 和 full gc 阶段回收。</p>
+<p>3.在分配H-obj之前先检查是否超过 <code>-XX:InitiatingHeapOccupancyPercent</code>，如果超过的话，就启动”并发标记”，以提早回收，防止 evacuation failures 和 full gc。</p>
+</blockquote>
+<p>Region的大小可以通过参数<code>-XX:G1HeapRegionSize</code>设定，取值范围从1M到32M，且是2的指数。如果不设定，那么G1会根据Heap大小自动决定。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">// 最小值 1M</span><br><span class="line">#define MIN_REGION_SIZE  (      1024 * 1024 )</span><br><span class="line">// 最大值 32M</span><br><span class="line">#define MAX_REGION_SIZE  ( 32 * 1024 * 1024 )</span><br><span class="line">#define TARGET_REGION_NUMBER          2048</span><br><span class="line">void HeapRegion::setup_heap_region_size(size_t initial_heap_size, size_t max_heap_size) &#123;</span><br><span class="line">  uintx region_size = G1HeapRegionSize;</span><br><span class="line">  // 使用默认值</span><br><span class="line">  if (FLAG_IS_DEFAULT(G1HeapRegionSize)) &#123;</span><br><span class="line">    size_t average_heap_size = (initial_heap_size + max_heap_size) / 2;</span><br><span class="line">    region_size = MAX2(average_heap_size / TARGET_REGION_NUMBER,</span><br><span class="line">                       (uintx) MIN_REGION_SIZE);</span><br><span class="line">  &#125;</span><br><span class="line">  int region_size_log = log2_long((jlong) region_size);</span><br><span class="line">  // 保证region大小是2的幂</span><br><span class="line">  region_size = ((uintx)1 &lt;&lt; region_size_log);</span><br><span class="line"></span><br><span class="line">  if (region_size &lt; MIN_REGION_SIZE) &#123;</span><br><span class="line">    region_size = MIN_REGION_SIZE;</span><br><span class="line">  &#125; else if (region_size &gt; MAX_REGION_SIZE) &#123;</span><br><span class="line">    region_size = MAX_REGION_SIZE;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="CSet"><a href="#CSet" class="headerlink" title="CSet"></a>CSet</h3><p>全称是Collection Set，是辅助GC过程的一种结构。</p>
+<p>CSet记录了GC要收集的Region集合，集合里的Region可以是任意年代的。在GC的时候，对于<code>old -&gt; young</code>和<code>old -&gt; old</code>的跨代对象引用，只要扫描对应的CSet中的RSet即可。</p>
+<h3 id="RSet"><a href="#RSet" class="headerlink" title="RSet"></a>RSet</h3><p>全称是Remembered Set，也是辅助GC过程的一种结构。</p>
+<p>逻辑上每个Region都有一个RSet，RSet记录了其他Region中的对象引用本Region中对象的关系，属于points-into结构（谁引用了我的对象）。RSet的价值在于使得垃圾收集器不需要扫描整个堆找到谁引用了当前分区中的对象，只需要扫描RSet即可。</p>
+<p>另外Card Table是一种points-out（我引用了谁的对象）的结构，每个Card 覆盖一定范围的Heap（一般为512Bytes）。RSet是在Card Table的基础上实现的：每个Region会记录下别的Region指向自己的指针，并标记这些指针分别在哪些Card的范围内。 RSet其实是一个Hash Table，Key是别的Region的起始地址，Value是一个集合，里面的元素是Card Table的Index。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/g1/rset.jpg?lastModify=1563524004" alt="img"></p>
+<p>上图中有三个Region，每个Region被分成了多个Card，在不同Region中的Card会相互引用，Region1中的Card中的对象引用了Region2中的Card中的对象，蓝色实线表示的就是points-out的关系，而在Region2的RSet中，记录了Region1的Card，即红色虚线表示的关系，这就是points-into。（Region2的RSet中会有一条 key = Region1的起始地址， vlaue = 元素包含该Card的index的集合）</p>
+<h3 id="对象漏标"><a href="#对象漏标" class="headerlink" title="对象漏标"></a>对象漏标</h3><p>垃圾回收的并发标记阶段，GC线程和应用线程是并发执行的，所以一个对象被标记之后，应用线程可能篡改对象的引用关系，从而造成对象的漏标、误标。误标没什么关系，顶多造成浮动垃圾，在下次gc还是可以回收的，但是漏标的后果是致命的，把本应该存活的对象给回收了，从而影响的程序的正确性。</p>
+<p>为了解决在并发标记过程中，存活对象漏标的情况，GC HandBook把对象分成三种颜色<code>即三色标记算法</code>：</p>
+<ul>
+<li>黑色：自身以及可达对象都已经被标记</li>
+<li>灰色：自身被标记，可达对象还未标记</li>
+<li>白色：还未被标记</li>
+</ul>
+<p>所以，漏标的情况只会发生在白色对象中，且满足以下任意一个条件：</p>
+<ul>
+<li>并发标记时，应用线程给一个黑色对象的引用类型字段赋值了该白色对象</li>
+<li>并发标记时，应用线程删除所有灰色对象到该白色对象的引用</li>
+</ul>
+<p>对于第一种情况，利用post-write barrier，记录所有新增的引用关系，然后根据这些引用关系为根重新扫描一遍</p>
+<p>对于第二种情况，利用pre-write barrier，将所有即将被删除的引用关系的旧引用记录下来，最后以这些旧引用为根重新扫描一遍</p>
+<h3 id="SATB"><a href="#SATB" class="headerlink" title="SATB"></a>SATB</h3><p>全称是Snapshot-At-The-Beginning，是由Taiichi Yuasa为增量式标记清除垃圾收集器设计的一个标记算法。字面表示GC开始时存活对象的一个快照，用于维持并发GC的正确性。</p>
+<p>Region包含了5个指针，分别是bottom、previous TAMS、next TAMS、top和end。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/g1/satb.png?lastModify=1563524004" alt="img"></p>
+<p>其中previous TAMS、next TAMS是前后两次发生并发标记时的位置，全称<code>top-at-mark-start</code></p>
+<ul>
+<li>假设第n轮并发标记开始，将该Region当前的top指针赋值给next TAMS，在并发标记标记期间，分配的对象都在[next TAMS, top]之间，SATB能够确保这部分的对象都会被标记，默认都是存活的。</li>
+<li>当并发标记结束时，将next TAMS所在的地址赋值给previous TAMS，SATB给 [bottom, previous TAMS] 之间的对象创建一个快照Bitmap，所有垃圾对象能通过快照被识别出来。</li>
+<li>第n+1轮并发标记开始，过程和第n轮一样</li>
+</ul>
+<blockquote>
+<p>SATB保证了在并发标记过程中新分配对象不会漏标!</p>
+</blockquote>
+<p>但如果在TAMS之前有一个白色对象W，被一个灰色对象G引用，在并发标记扫描到这个字段之前被赋值为null，切断了对象W和对象G之间的引用关系，对象W就有可能漏标，这就是白色对象被漏标的第二种情况。</p>
+<p>G1的解决办法则是在引用关系被修改之前，插入一层pre-write barrier</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">template &lt;class T&gt; static void write_ref_field_pre_static(T* field, oop newVal) &#123;</span><br><span class="line">  T heap_oop = oopDesc::load_heap_oop(field);</span><br><span class="line">  if (!oopDesc::is_null(heap_oop)) &#123;</span><br><span class="line">    // 核心方法</span><br><span class="line">    enqueue(oopDesc::decode_heap_oop(heap_oop));</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">void G1SATBCardTableModRefBS::enqueue(oop pre_val) &#123;</span><br><span class="line">  if (!JavaThread::satb_mark_queue_set().is_active()) return;</span><br><span class="line">  Thread* thr = Thread::current();</span><br><span class="line">  if (thr-&gt;is_Java_thread()) &#123;</span><br><span class="line">    JavaThread* jt = (JavaThread*)thr;</span><br><span class="line">    // 入队</span><br><span class="line">    jt-&gt;satb_mark_queue().enqueue(pre_val);</span><br><span class="line">  &#125; else &#123;</span><br><span class="line">    MutexLockerEx x(Shared_SATB_Q_lock, Mutex::_no_safepoint_check_flag);</span><br><span class="line">    JavaThread::satb_mark_queue_set().shared_satb_queue()-&gt;enqueue(pre_val);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>通过<code>G1SATBCardTableModRefBS::enqueue(oop pre_val)</code>把原引用保存到satb mark queue中，和RSet的实现类似，每个应用线程都自带一个satb mark queue.在下一次的并发标记阶段，会依次处理satb mark queue中的对象，确保这部分对象在本轮GC是存活的。</p>
+<h2 id="垃圾回收"><a href="#垃圾回收" class="headerlink" title="垃圾回收"></a>垃圾回收</h2><p>G1提供了两种GC模式，Young GC和Mixed GC。 </p>
+<p>Young GC：选定所有年轻代里的Region。通过控制年轻代的region个数，即年轻代内存大小，来控制young GC的时间开销。</p>
+<p>Mixed GC：选定所有年轻代里的Region + 并发标记阶段统计得出收集收益高的若干老年代Region。在用户指定的开销目标范围内尽可能选择收益高的老年代Region。</p>
+<p>Mixed GC不是full GC，它只能回收部分老年代的Region，如果mixed GC实在无法跟上程序分配内存的速度，导致老年代填满无法继续进行Mixed GC，就会使用serial old GC（full GC）来收集整个GC heap。</p>
+<h3 id="Young-GC"><a href="#Young-GC" class="headerlink" title="Young GC"></a>Young GC</h3><p>Eden区耗尽的时候就会触发Young GC，新生代垃圾收集会对整个新生代进行回收。</p>
+<blockquote>
+<p>Young GC会stop-the-world。</p>
+<p>Young GC是多线程并行执行的。</p>
+</blockquote>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/g1/younggc.png?lastModify=1563524004" alt="img"></p>
+<p>Young GC过程日志：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">2019-06-25T15:22:12.407+0800: 21.553: [GC pause (G1 Evacuation Pause) (young), 0.0247670 secs]</span><br><span class="line">   [Parallel Time: 18.7 ms, GC Workers: 8]</span><br><span class="line">      [GC Worker Start (ms): Min: 21553.0, Avg: 21553.1, Max: 21553.2, Diff: 0.2]</span><br><span class="line">      [Ext Root Scanning (ms): Min: 0.2, Avg: 1.0, Max: 3.1, Diff: 2.9, Sum: 8.4]</span><br><span class="line">      [Update RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]</span><br><span class="line">         [Processed Buffers: Min: 0, Avg: 0.0, Max: 0, Diff: 0, Sum: 0]</span><br><span class="line">      [Scan RS (ms): Min: 0.0, Avg: 0.1, Max: 0.1, Diff: 0.1, Sum: 0.5]</span><br><span class="line">      [Code Root Scanning (ms): Min: 0.0, Avg: 1.2, Max: 2.6, Diff: 2.6, Sum: 9.6]</span><br><span class="line">      [Object Copy (ms): Min: 15.5, Avg: 16.2, Max: 17.7, Diff: 2.2, Sum: 129.4]</span><br><span class="line">      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2]</span><br><span class="line">      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.1, Diff: 0.0, Sum: 0.2]</span><br><span class="line">      [GC Worker Total (ms): Min: 18.4, Avg: 18.5, Max: 18.6, Diff: 0.2, Sum: 148.3]</span><br><span class="line">      [GC Worker End (ms): Min: 21571.6, Avg: 21571.6, Max: 21571.6, Diff: 0.0]</span><br><span class="line">   [Code Root Fixup: 1.4 ms]</span><br><span class="line">   [Code Root Purge: 0.0 ms]</span><br><span class="line">   [Clear CT: 0.2 ms]</span><br><span class="line">   [Other: 4.4 ms]</span><br><span class="line">      [Choose CSet: 0.0 ms]</span><br><span class="line">      [Ref Proc: 3.4 ms]</span><br><span class="line">      [Ref Enq: 0.0 ms]</span><br><span class="line">      [Redirty Cards: 0.1 ms]</span><br><span class="line">      [Humongous Reclaim: 0.0 ms]</span><br><span class="line">      [Free CSet: 0.7 ms]</span><br><span class="line">   [Eden: 597.0M(597.0M)-&gt;0.0B(585.0M) Survivors: 17.0M-&gt;29.0M Heap: 614.0M(1024.0M)-&gt;29.0M(1024.0M)]</span><br><span class="line"> [Times: user=0.14 sys=0.01, real=0.02 secs]</span><br></pre></td></tr></table></figure>
+<p>简要说明：</p>
+<blockquote>
+<p>GC pause (G1 Evacuation Pause) (young)：新生代对象分配失败，触发Young GC</p>
+<p>Update RS：更新RSet的耗时统计，内部Processed Buffers表示每个线程的耗时</p>
+<p>Object Copy：将存活的对象拷贝到新Region耗时</p>
+<p>Clear CT：清理Card Table耗时</p>
+</blockquote>
+<h3 id="并发标记周期（global-concurrent-marking）"><a href="#并发标记周期（global-concurrent-marking）" class="headerlink" title="并发标记周期（global concurrent marking）"></a>并发标记周期（global concurrent marking）</h3><p>G1设计了一个标记阈值<code>the marking threshold</code>，它描述的是总体Java堆大小的百分比，默认值是45，这个值可以通过命令<code>-XX:InitiatingHeapOccupancyPercent</code>来调整，一旦达到这个阈值就回触发一次<code>并发标记周期</code>。</p>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/g1/%E5%B9%B6%E5%8F%91%E6%A0%87%E8%AE%B0.png?lastModify=1563524004" alt="img"></p>
+<p>从图中可以注意到：</p>
+<ul>
+<li>新生代的空间占用情况发生了变化——在并发收集周期中，至少有一次（很可能是多次）新生代垃圾收集；</li>
+<li>注意到一些分区被标记为X，这些分区属于老年代，它们就是标记周期找出的包含最多垃圾的分区（注意：它们内部仍然保留着数据）；</li>
+<li>老年代的空间占用在标记周期结束后变得更多，这是因为在标记周期期间，新生代的垃圾收集会晋升对象到老年代，而且标记周期中并不会是否老年代的任何对象。</li>
+</ul>
+<p>并发标记周期的多个阶段：</p>
+<ul>
+<li>初始标记（initial-mark），在这个阶段，应用会经历STW，通常初始标记阶段会跟一次新生代收集一起进行，换句话说——既然这两个阶段都需要暂停应用，G1 GC就重用了新生代收集来完成初始标记的工作。在新生代垃圾收集中进行初始标记的工作，会让停顿时间稍微长一点，并且会增加CPU的开销。初始标记做的工作是设置两个TAMS变量（NTAMS和PTAMS）的值，所有在TAMS之上的对象在这个并发周期内会被识别为隐式存活对象；</li>
+<li>根分区扫描（root-region-scan），这个过程不需要暂停应用，在初始标记或新生代收集中被拷贝到survivor分区的对象，都需要被看做是根，这个阶段G1开始扫描survivor分区，所有被survivor分区所引用的对象都会被扫描到并将被标记。survivor分区就是根分区，正因为这个，该阶段不能发生新生代收集，如果扫描根分区时，新生代的空间恰好用尽，新生代垃圾收集必须等待根分区扫描结束才能完成。如果在日志中发现根分区扫描和新生代收集的日志交替出现，就说明当前应用需要调优。</li>
+<li>并发标记阶段（concurrent-mark），并发标记阶段是多线程的，我们可以通过<code>-XX:ConcGCThreads</code>来设置并发线程数，默认情况下，G1垃圾收集器会将这个线程总数设置为并行垃圾线程数（<code>-XX:ParallelGCThreads</code>）的四分之一；并发标记会利用trace算法找到所有活着的对象，并记录在一个bitmap中，因为在TAMS之上的对象都被视为隐式存活，因此我们只需要遍历那些在TAMS之下的；记录在标记的时候发生的引用改变，SATB的思路是在开始的时候设置一个快照，然后假定这个快照不改变，根据这个快照去进行trace，这时候如果某个对象的引用发生变化，就需要通过pre-write barrier logs将该对象的旧的值记录在一个SATB缓冲区中，如果这个缓冲区满了，就把它加到一个全局的列表中——G1会有并发标记的线程定期去处理这个全局列表。</li>
+<li>重新标记阶段（remarking），重新标记阶段是最后一个标记阶段，需要暂停整个应用，G1垃圾收集器会处理掉剩下的SATB日志缓冲区和所有更新的引用，同时G1垃圾收集器还会找出所有未被标记的存活对象。这个阶段还会负责引用处理等工作。</li>
+<li>清理阶段（cleanup），清理阶段真正回收的内存很小，截止到这个阶段,G1垃圾收集器主要是标记处哪些老年代分区可以回收，将老年代按照它们的存活度（liveness）从小到大排列。这个过程还会做几个事情：识别出所有空闲的分区、RSet梳理、将不用的类从metaspace中卸载、回收巨型对象等等。识别出每个分区里存活的对象有个好处是在遇到一个完全空闲的分区时，它的RSet可以立即被清理，同时这个分区可以立刻被回收并释放到空闲队列中，而不需要再放入CSet等待混合收集阶段回收；梳理RSet有助于发现无用的引用。</li>
+</ul>
+<p><img src="https://raw.githubusercontent.com/xuyuqi77/img-store/master/g1/%E5%B9%B6%E5%8F%91%E6%A0%87%E8%AE%B0%E7%A4%BA%E6%84%8F%E5%9B%BE.png?lastModify=1563524004" alt="img"></p>
+<p>并发标记周期日志：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">2019-06-25T17:34:37.194+0800: 7966.340: [GC pause (G1 Humongous Allocation) (young) (initial-mark), 0.0156129 secs]</span><br><span class="line">   [Parallel Time: 13.9 ms, GC Workers: 8]</span><br><span class="line">      [GC Worker Start (ms): Min: 7966339.8, Avg: 7966339.9, Max: 7966340.0, Diff: 0.2]</span><br><span class="line">      [Ext Root Scanning (ms): Min: 1.0, Avg: 1.1, Max: 1.3, Diff: 0.3, Sum: 8.9]</span><br><span class="line">      [Update RS (ms): Min: 11.8, Avg: 11.9, Max: 12.0, Diff: 0.2, Sum: 94.8]</span><br><span class="line">         [Processed Buffers: Min: 157, Avg: 165.3, Max: 170, Diff: 13, Sum: 1322]</span><br><span class="line">      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.1, Diff: 0.1, Sum: 0.4]</span><br><span class="line">      [Code Root Scanning (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]</span><br><span class="line">      [Object Copy (ms): Min: 0.5, Avg: 0.6, Max: 0.6, Diff: 0.1, Sum: 4.8]</span><br><span class="line">      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]</span><br><span class="line">      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2]</span><br><span class="line">      [GC Worker Total (ms): Min: 13.6, Avg: 13.6, Max: 13.8, Diff: 0.2, Sum: 109.1]</span><br><span class="line">      [GC Worker End (ms): Min: 7966353.5, Avg: 7966353.5, Max: 7966353.6, Diff: 0.0]</span><br><span class="line">   [Code Root Fixup: 0.0 ms]</span><br><span class="line">   [Code Root Purge: 0.0 ms]</span><br><span class="line">   [Clear CT: 0.5 ms]</span><br><span class="line">   [Other: 1.2 ms]</span><br><span class="line">      [Choose CSet: 0.0 ms]</span><br><span class="line">      [Ref Proc: 0.1 ms]</span><br><span class="line">      [Ref Enq: 0.0 ms]</span><br><span class="line">      [Redirty Cards: 0.6 ms]</span><br><span class="line">      [Humongous Reclaim: 0.1 ms]</span><br><span class="line">      [Free CSet: 0.1 ms]</span><br><span class="line">   [Eden: 328.0M(610.0M)-&gt;0.0B(609.0M) Survivors: 4096.0K-&gt;5120.0K Heap: 762.8M(1024.0M)-&gt;149.1M(1024.0M)]</span><br><span class="line"> [Times: user=0.05 sys=0.00, real=0.02 secs] </span><br><span class="line">2019-06-25T17:34:37.209+0800: 7966.355: [GC concurrent-root-region-scan-start]</span><br><span class="line">2019-06-25T17:34:37.211+0800: 7966.357: [GC concurrent-root-region-scan-end, 0.0016811 secs]</span><br><span class="line">2019-06-25T17:34:37.211+0800: 7966.357: [GC concurrent-mark-start]</span><br><span class="line">2019-06-25T17:34:37.242+0800: 7966.388: [GC concurrent-mark-end, 0.0308061 secs]</span><br><span class="line">2019-06-25T17:34:37.242+0800: 7966.388: [GC remark 7966.388: [Finalize Marking, 0.0004156 secs] 7966.389: [GC ref-proc, 0.0001542 secs] 7966.389: [Unloading, 0.0072260 secs], 0.0085303 secs]</span><br><span class="line"> [Times: user=0.00 sys=0.00, real=0.01 secs] </span><br><span class="line">2019-06-25T17:34:37.251+0800: 7966.397: [GC cleanup 225M-&gt;217M(1024M), 0.0013890 secs]</span><br><span class="line"> [Times: user=0.00 sys=0.00, real=0.00 secs] </span><br><span class="line">2019-06-25T17:34:37.253+0800: 7966.399: [GC concurrent-cleanup-start]</span><br><span class="line">2019-06-25T17:34:37.253+0800: 7966.399: [GC concurrent-cleanup-end, 0.0000115 secs]</span><br></pre></td></tr></table></figure>
+<p>简要说明</p>
+<blockquote>
+<p>GC pause (G1 Humongous Allocation) (young) (initial-mark) : 在一次young gc中进行初识标记</p>
+<p>concurrent-root-region-scan-start：根分区扫描开始</p>
+<p>concurrent-mark-start：并发标记阶段开始</p>
+<p>remark：重新标记阶段</p>
+<p>cleanup：清理阶段</p>
+</blockquote>
+<h3 id="Mixed-GC"><a href="#Mixed-GC" class="headerlink" title="Mixed GC"></a>Mixed GC</h3><p>Mixed GC触发的时机并不像Young GC那么明显，它由一些参数控制。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">参数</th>
+<th style="text-align:left">说明</th>
+<th style="text-align:left">默认值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">-XX:G1HeapWastePercent</td>
+<td style="text-align:left">该值表示愿意浪费的堆百分比。当可回收的垃圾占比大于该值时，则会触发Mixed GC。</td>
+<td style="text-align:left">10</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:G1MixedGCLiveThresholdPercent</td>
+<td style="text-align:left">该值表示如果一个分区中的存活对象比例超过n，就不会被当作垃圾分区。</td>
+<td style="text-align:left">65</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:G1MixedGCCountTarget</td>
+<td style="text-align:left">一次并发标记周期后，最多执行Mixed GC的次数。</td>
+<td style="text-align:left">8</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:G1OldCSetRegionThresholdPercent</td>
+<td style="text-align:left">一次Mixed GC期间可被回收的最大的老年代的比例上限（选入CSet的最多old generation region数量）</td>
+<td style="text-align:left">10</td>
+</tr>
+</tbody>
+</table>
+<p>Mixed GC日志：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line">2019-06-25T17:37:56.925+0800: 8166.070: [GC pause (G1 Evacuation Pause) (mixed), 0.0439753 secs]</span><br><span class="line">   [Parallel Time: 41.4 ms, GC Workers: 8]</span><br><span class="line">      [GC Worker Start (ms): Min: 8166071.0, Avg: 8166071.2, Max: 8166071.3, Diff: 0.3]</span><br><span class="line">      [Ext Root Scanning (ms): Min: 1.3, Avg: 1.5, Max: 2.3, Diff: 1.0, Sum: 12.3]</span><br><span class="line">      [Update RS (ms): Min: 38.2, Avg: 38.6, Max: 38.7, Diff: 0.5, Sum: 309.1]</span><br><span class="line">         [Processed Buffers: Min: 103, Avg: 112.4, Max: 124, Diff: 21, Sum: 899]</span><br><span class="line">      [Scan RS (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2]</span><br><span class="line">      [Code Root Scanning (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]</span><br><span class="line">      [Object Copy (ms): Min: 0.4, Avg: 0.6, Max: 0.7, Diff: 0.3, Sum: 4.6]</span><br><span class="line">      [Termination (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.0]</span><br><span class="line">      [GC Worker Other (ms): Min: 0.0, Avg: 0.0, Max: 0.0, Diff: 0.0, Sum: 0.2]</span><br><span class="line">      [GC Worker Total (ms): Min: 40.7, Avg: 40.8, Max: 41.0, Diff: 0.3, Sum: 326.4]</span><br><span class="line">      [GC Worker End (ms): Min: 8166112.0, Avg: 8166112.0, Max: 8166112.0, Diff: 0.0]</span><br><span class="line">   [Code Root Fixup: 0.1 ms]</span><br><span class="line">   [Code Root Purge: 0.0 ms]</span><br><span class="line">   [Clear CT: 0.8 ms]</span><br><span class="line">   [Other: 1.7 ms]</span><br><span class="line">      [Choose CSet: 0.0 ms]</span><br><span class="line">      [Ref Proc: 0.2 ms]</span><br><span class="line">      [Ref Enq: 0.0 ms]</span><br><span class="line">      [Redirty Cards: 0.5 ms]</span><br><span class="line">      [Humongous Reclaim: 0.1 ms]</span><br><span class="line">      [Free CSet: 0.1 ms]</span><br><span class="line">   [Eden: 51.0M(51.0M)-&gt;0.0B(601.0M) Survivors: 0.0B-&gt;2048.0K Heap: 513.8M(1024.0M)-&gt;313.3M(1024.0M)]</span><br><span class="line"> [Times: user=0.38 sys=0.00, real=0.04 secs]</span><br></pre></td></tr></table></figure>
+<h2 id="JDK各版本修改"><a href="#JDK各版本修改" class="headerlink" title="JDK各版本修改"></a>JDK各版本修改</h2><table>
+<thead>
+<tr>
+<th style="text-align:left">JDK版本</th>
+<th style="text-align:left">修改</th>
+<th style="text-align:left">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">JDK 9</td>
+<td style="text-align:left">G1成为默认垃圾回收器</td>
+<td style="text-align:left"><a href="http://openjdk.java.net/jeps/248" target="_blank" rel="noopener">http://openjdk.java.net/jeps/248</a></td>
+</tr>
+<tr>
+<td style="text-align:left">JDK 9</td>
+<td style="text-align:left">对G1中的大对象进行了测试</td>
+<td style="text-align:left"><a href="http://openjdk.java.net/jeps/278" target="_blank" rel="noopener">http://openjdk.java.net/jeps/278</a></td>
+</tr>
+<tr>
+<td style="text-align:left">JDK 10</td>
+<td style="text-align:left">引入并行Full GC</td>
+<td style="text-align:left">之前的G1执行Full GC采用单线程mark-sweep-compact算法<a href="http://openjdk.java.net/jeps/307" target="_blank" rel="noopener">http://openjdk.java.net/jeps/307</a></td>
+</tr>
+<tr>
+<td style="text-align:left">JDK 12</td>
+<td style="text-align:left">可终止的Mixed GC</td>
+<td style="text-align:left"><a href="http://openjdk.java.net/jeps/344" target="_blank" rel="noopener">http://openjdk.java.net/jeps/344</a></td>
+</tr>
+<tr>
+<td style="text-align:left">JDK 12</td>
+<td style="text-align:left">及时返回未使用的已分配内存</td>
+<td style="text-align:left">该功能默认关闭 <a href="http://openjdk.java.net/jeps/346" target="_blank" rel="noopener">http://openjdk.java.net/jeps/346</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="参数介绍"><a href="#参数介绍" class="headerlink" title="参数介绍"></a>参数介绍</h2><table>
+<thead>
+<tr>
+<th style="text-align:left">参数</th>
+<th style="text-align:left">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left">-XX:+UseG1GC</td>
+<td style="text-align:left">使用 G1 收集器</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:MaxGCPauseMillis</td>
+<td style="text-align:left">指定目标停顿时间，默认值 200 毫秒</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:InitiatingHeapOccupancyPercent</td>
+<td style="text-align:left">整堆使用达到这个比例后，触发并发标记周期，默认 45%</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:G1HeapWastePercent</td>
+<td style="text-align:left">该值表示愿意浪费的堆百分比。当可回收的垃圾占比大于该值时，则会触发Mixed GC。默认10%</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:G1MixedGCLiveThresholdPercent</td>
+<td style="text-align:left">该值表示如果一个分区中的存活对象比例超过n，就不会被当作垃圾分区。默认65%</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:G1MixedGCCountTarget</td>
+<td style="text-align:left">一次并发标记周期后，最多执行Mixed GC的次数。默认8</td>
+</tr>
+<tr>
+<td style="text-align:left">-XX:G1OldCSetRegionThresholdPercent</td>
+<td style="text-align:left">一次Mixed GC期间可被回收的最大的老年代的比例上限（选入CSet的最多old generation region数量）。默认10%</td>
+</tr>
+</tbody>
+</table>
+</div><div class="post-footer"><div class="meta"><div class="info"><i class="fa fa-sun-o"></i><span class="date">2019-07-19</span><i class="fa fa-tag"></i><a class="tag" href="/tags/java/" title="java">java </a></div></div></div></div><div class="share"><div class="evernote"><a class="fa fa-bookmark" href="javascript:(function(){EN_CLIP_HOST='http://www.evernote.com';try{var%20x=document.createElement('SCRIPT');x.type='text/javascript';x.src=EN_CLIP_HOST+'/public/bookmarkClipper.js?'+(new%20Date().getTime()/100000);document.getElementsByTagName('head')[0].appendChild(x);}catch(e){location.href=EN_CLIP_HOST+'/clip.action?url='+encodeURIComponent(location.href)+'&amp;title='+encodeURIComponent(document.title);}})();" ref="nofollow" target="_blank"></a></div><div class="weibo"><a class="fa fa-weibo" href="javascript:void((function(s,d,e){try{}catch(e){}var f='http://service.weibo.com/share/share.php?',u=d.location.href,p=['url=',e(u),'&amp;title=',e(d.title),'&amp;appkey=2924220432'].join('');function a(){if(!window.open([f,p].join(''),'mb',['toolbar=0,status=0,resizable=1,width=620,height=450,left=',(s.width-620)/2,',top=',(s.height-450)/2].join('')))u.href=[f,p].join('');};if(/Firefox/.test(navigator.userAgent)){setTimeout(a,0)}else{a()}})(screen,document,encodeURIComponent));"></a></div><div class="twitter"><a class="fa fa-twitter" href="http://twitter.com/home?status=,https://xuyuqi77.github.io/2019/07/19/G1垃圾收集器/,徐煜企的博客,G1垃圾收集器,;"></a></div></div><div class="pagination"><ul class="clearfix"><li class="next pagbuttons"><a class="btn" role="navigation" href="/2019/07/05/记一次频繁fullgc/" title="记一次频繁fullgc">下一篇</a></li></ul></div><a id="comments"></a><div id="vcomments" style="margin:0 30px;"></div><script src="//cdn1.lncld.net/static/js/3.0.4/av-min.js"></script><script src="//cdn.jsdelivr.net/gh/xcss/valine@v1.1.7/dist/Valine.min.js?v=undefined"></script><script>var valine = new Valine({
+  el:'#vcomments',
+  notify:false || false, 
+  verify:false|| false, 
+  app_id:'ACHHxtdr6iGJakMn0fm8SfAO-gzGzoHsz',
+  app_key:'O2Wqtq6XI9kCFU3UtjgwLRuW',
+  placeholder:'请在此输入您的留言',
+  path: window.location.pathname,
+  avatar:'mm'
+})</script></div></div></div></div><script src="/js/jquery.js"></script><script src="/js/jquery-migrate-1.2.1.min.js"></script><script src="/js/jquery.appear.js"></script></body></html>
